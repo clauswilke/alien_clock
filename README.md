@@ -1,4 +1,4 @@
-Building an Alien Clock
+## Building an Alien Clock
 
 Supporting code for the article [Building an Alien Clock](https://www.fxhash.xyz/article/building-an-alien-clock) published on fx(hash).
 
