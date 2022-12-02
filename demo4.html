@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<style>
+	  canvas { display: block; margin: auto; border: 0px; }
+	  body { margin: 0px; }
+	 </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+</body>
+
+<script>
+// Written by Claus O. Wilke, November 2022
+// Licensed under CC0, https://creativecommons.org/publicdomain/zero/1.0/
+const canvas = document.getElementById('canvas')
+const scale = 500 // half width of canvas
+canvas.width = 2 * scale
+canvas.height = 2 * scale
+const ctx = canvas.getContext('2d')
+
+let time = 0
+let m = 48 // number of dots per group in scene
+let do_animation = true
+let scene = setupScene()
+let colors = ['#00426b', '#973a05', '#15550A']
+
+// resize image in response to window size
+window.addEventListener('resize', resizeWindow)
+resizeWindow() // call once to make sure image is sized correctly
+
+document.addEventListener('keyup', function (event) {
+  if (event.key === ' ') { toggleAnim() }
+})
+
+const toPolar = (x, y) => ({r: Math.sqrt(x * x + y * y), a: Math.atan2(y, x) / (2 * Math.PI)})
+const toCartesian = (r, a) => ({x: r * Math.cos(2 * Math.PI * a), y: r * Math.sin(2 * Math.PI * a)})
+// fifth-order interpolation
+const interpolate = (a, s) => {
+  let t = a % 1,  // normalize angle to fall between 0 and 1
+      t2 = t*t, t4 = t2*t2, u = 1-t, u2 = u*u, // second and fourth-order terms
+      // calculate coefficients, +-2 is a tuning constant, can be different
+      A = s + 2, B = s - 2
+      // return fifth-order polynomial
+      return t*t4 + 5*t4*u + A*10*t*t2*u2 + B*10*t2*u2*u
+}
+const groupIdx = (i) => (Math.floor(i / m))
+const withinGroupIdx = (i) => (i % m)
+
+function animate () {
+  if (do_animation) { window.requestAnimationFrame(animate) }
+  
+  // clear frame
+  ctx.fillStyle = '#FFFDF840'
+  ctx.fillRect(0, 0, 2 * scale, 2 * scale)
+  
+  // draw scene
+  ctx.save()
+  ctx.translate(scale, scale) // place origin in center
+  drawPoints(rotateScene(scene, 0.002 * time))
+  ctx.restore()
+
+  time += 1
+}
+
+function drawPoints (data) {
+  for (let i = 0; i < data.length; i++) {
+    let p = data[i]
+    ctx.beginPath()
+    ctx.arc(scale * p.x, scale * p.y, 0.01 * scale, 0, 2 * Math.PI)
+    ctx.fillStyle = colors[groupIdx(i)]
+    ctx.fill()
+  }
+}
+
+function setupScene () {
+  let n = m / 4
+  let scene = []
+  
+  // square
+  for (let i = 0; i < n; i++) {
+    scene.push({ x: -0.75 + 0.5 * (i + 0.5) / n, y: -0.75 })
+  }
+  for (let i = 0; i < n; i++) {
+    scene.push({ x: -0.25, y: -0.75 + 0.5 * (i + 0.5) / n })
+  }
+  for (let i = 0; i < n; i++) {
+    scene.push({ x: -0.25 - 0.5 * (i + 0.5) / n, y: -0.25 })
+  }
+  for (let i = 0; i < n; i++) {
+    scene.push({ x: -0.75, y: -0.25 - 0.5 * (i + 0.5) / n })
+  }
+
+  // circle
+  let r = 0.3
+  for (let i = 0; i < m; i++) {
+    scene.push({ x: 0.5 + r * Math.cos(2 * Math.PI * (i + 0.5) / m), y: -0.1  - r * Math.sin(2 * Math.PI * (i + 0.5) / m)})
+  }
+
+  // triangle
+  // vertices: (-0.5, 0.7), (0.1, 0.7), (-0.2, 0.7 - 0.3*sqrt(3))
+  let k = m / 3
+  for (let i = 0; i < k; i++) {
+    scene.push({ x: -0.5 + 0.6 * (i + 0.5) / k, y: 0.7 })
+  }
+  for (let i = 0; i < k; i++) {
+    scene.push({ x: 0.1 - 0.3 * (i + 0.5) / k, y: 0.7 - 0.3 * Math.sqrt(3) * (i + 0.5) / k })
+  }
+  for (let i = 0; i < k; i++) {
+    scene.push({ x: -0.2 - 0.3 * (i + 0.5) / k, y: 0.7 - 0.3 * Math.sqrt(3) * (k - i - 0.5) / k })
+  }
+  
+  return scene
+}
+
+
+function rotateScene (scene, time) {
+  let out = []
+  
+  for (let i = 0; i < scene.length; i++) {
+    let p = scene[i]
+    let polar = toPolar(p.x, p.y)
+    let a = polar.a + interpolate(time + groupIdx(i) / 3, (withinGroupIdx(i) + 0.5)/m) - interpolate(groupIdx(i) / 3, (withinGroupIdx(i) + 0.5)/m)
+    let cart = toCartesian(polar.r, a)
+    out.push(cart)
+  }
+  return out
+}
+
+function resizeWindow() {
+  let width
+  if (window.innerHeight < window.innerWidth) {
+    width = window.innerHeight
+  } else {
+    width = window.innerWidth
+  }
+  canvas.style.width = `${width}px`
+  canvas.style.height = `${width}px`
+}
+
+function toggleAnim() {
+  do_animation = do_animation ?
+    false : (window.requestAnimationFrame(animate), true)
+}
+
+// start animation
+animate()
+
+</script>
+</html>
