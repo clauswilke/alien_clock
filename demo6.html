@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<style>
+	  canvas { display: block; margin: auto; border: 0px; }
+	  body { margin: 0px; background-color: #0c041f; }
+	 </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+</body>
+
+<script>
+// Written by Claus O. Wilke, December 2022
+// Licensed under CC0, https://creativecommons.org/publicdomain/zero/1.0/
+const canvas = document.getElementById('canvas')
+const scale = 500 // half width of canvas
+canvas.width = 2 * scale
+canvas.height = 2 * scale
+const ctx = canvas.getContext('2d')
+
+let time = 0
+let m = 60 // number of dots per group in scene
+let do_animation = true
+let scene = setupScene()
+
+// animation speed control
+let last_timestamp = 0,
+    target_FPS = 60,
+    anim_timestep = 1000 / target_FPS // ms per each frame
+
+const hash = (x) => Math.sin(59482.23 * x) % 1
+
+const toHex = (x) => {
+  x = Math.floor(x + 0.5).toString(16)
+  return x.length === 1 ? "0" + x : x
+}
+const rgb = (R, G, B) => `#${toHex(R)}${toHex(G)}${toHex(B)}`
+const palette = (x) => rgb(
+    255 * (0.5 + 0.1 * hash(x) + 0.4 * Math.sin(6.2832 * x)),
+    255 * (0.5 + 0.1 * hash(x) + 0.4 * Math.sin(6.2832 * (x - 0.06))),
+    255 * (0.5 + 0.1 * hash(x) + 0.4 * Math.sin(6.2832 * (x + 0.17)))
+  )
+
+// resize image in response to window size
+window.addEventListener('resize', resizeWindow)
+resizeWindow() // call once to make sure image is sized correctly
+
+document.addEventListener('keyup', function (event) {
+  if (event.key === ' ') { toggleAnim() }
+})
+
+const toPolar = (x, y) => ({r: Math.sqrt(x * x + y * y), a: Math.atan2(y, x) / (2 * Math.PI)})
+const toCartesian = (r, a) => ({x: r * Math.cos(2 * Math.PI * a), y: r * Math.sin(2 * Math.PI * a)})
+// fifth-order interpolation
+const interpolate = (a, s) => {
+  let t = a % 1,  // normalize angle to fall between 0 and 1
+      t2 = t*t, t4 = t2*t2, u = 1-t, u2 = u*u, // second and fourth-order terms
+      // calculate coefficients, +-2 is a tuning constant, can be different
+      A = s + 2, B = s - 2
+      // return fifth-order polynomial
+      return t*t4 + 5*t4*u + A*10*t*t2*u2 + B*10*t2*u2*u
+}
+const groupIdx = (i) => (Math.floor(i / m))
+const withinGroupIdx = (i) => (i % m)
+
+function animate (timestamp) {
+  if (do_animation) { window.requestAnimationFrame(animate) }
+  
+  let delta = timestamp - last_timestamp
+  // Animation speed control option one: drop frames
+  /*
+  // check if sufficient time has past to draw a new frame
+  if (delta < anim_timestep) {
+    return
+  }
+  time += 1
+  */
+  
+  // Animation speed control option two:
+  //   increment time based on actual time passed
+  // If delta > 500 we are restarting after a pause, so we increment by 1
+  // to avoid strange jumps in the animation
+  time += delta > 500 ? 1 : delta / anim_timestep
+  
+  // record last timestamp
+  last_timestamp = timestamp
+
+  // clear frame
+  ctx.fillStyle = '#10082015'
+  ctx.fillRect(0, 0, 2 * scale, 2 * scale)
+  
+  // draw scene
+  ctx.save()
+  ctx.translate(scale, scale) // place origin in center
+  drawLines(rotateScene(scene, 0.0002 * time))
+  ctx.restore()
+}
+
+function drawLines (data) {
+  ctx.lineWidth = 2.5
+  for (let i = 0; i < data.length; i++) {
+    let p = data[i]
+    ctx.beginPath()
+    ctx.moveTo(scale * p.x1, scale * p.y1)
+    ctx.lineTo(scale * p.x2, scale * p.y2)
+    ctx.strokeStyle = palette((withinGroupIdx(i) + 0.5)/m)
+    ctx.stroke()
+  }
+}
+
+function setupScene () {
+  let scene = []
+  let x0, y0, r1, r2
+  let tau = 2 * Math.PI
+  
+  // group 1
+  x0 = 0.6 * Math.cos(0 * tau / 5)
+  y0 = 0.6 * Math.sin(0 * tau / 5)
+  r1 = 0.2
+  r2 = 0.9
+  for (let i = 0; i < m; i++) {
+    scene.push({ x1: x0 + r1 * Math.cos(i * tau / m),
+                 y1: x0 + r1 * Math.sin(i * tau / m),
+                 x2: r2 * Math.cos(i * tau / m + tau / 2),
+                 y2: r2 * Math.sin(i * tau / m + tau / 2) })
+  }
+
+  // group 2
+  x0 = 0.6 * Math.cos(1 * tau / 5)
+  y0 = 0.6 * Math.sin(1 * tau / 5)
+  r1 = 0.2
+  r2 = 0.8
+  for (let i = 0; i < m; i++) {
+    scene.push({ x1: x0 + r1 * Math.cos(i * tau / m),
+                 y1: x0 + r1 * Math.sin(i * tau / m),
+                 x2: 0.05 + r2 * Math.cos(i * tau / m + tau / 2),
+                 y2: r2 * Math.sin(i * tau / m + tau / 2) })
+  }
+
+  // group 3
+  x0 = 0.6 * Math.cos(2 * tau / 5)
+  y0 = 0.6 * Math.sin(2 * tau / 5)
+  r1 = 0.2
+  r2 = 0.7
+  for (let i = 0; i < m; i++) {
+    scene.push({ x1: x0 + r1 * Math.cos(i * tau / m),
+                 y1: x0 + r1 * Math.sin(i * tau / m),
+                 x2: 0.1 + r2 * Math.cos(i * tau / m + tau / 2),
+                 y2: r2 * Math.sin(i * tau / m + tau / 2) })
+  }
+
+  return scene
+}
+
+
+function rotateScene (scene, time) {
+  let out = []
+  
+  for (let i = 0; i < scene.length; i++) {
+    let p = scene[i]
+    let polar = toPolar(p.x1, p.y1)
+    let a = polar.a + interpolate(time + groupIdx(i) / 3, (withinGroupIdx(i) + 0.5)/m) - interpolate(groupIdx(i) / 3, (withinGroupIdx(i) + 0.5)/m)
+    let cart1 = toCartesian(polar.r, a)
+    polar = toPolar(p.x2, p.y2)
+    a = polar.a + interpolate(2*time + groupIdx(i) / 3, (withinGroupIdx(i) + 0.5)/m) - interpolate(groupIdx(i) / 3, (withinGroupIdx(i) + 0.5)/m)
+    let cart2 = toCartesian(polar.r, a)
+    out.push({ x1: cart1.x, y1: cart1.y, x2: cart2.x, y2: cart2.y })
+  }
+  return out
+}
+
+function resizeWindow() {
+  let width
+  if (window.innerHeight < window.innerWidth) {
+    width = window.innerHeight
+  } else {
+    width = window.innerWidth
+  }
+  canvas.style.width = `${width}px`
+  canvas.style.height = `${width}px`
+}
+
+function toggleAnim() {
+  do_animation = do_animation ?
+    false : (window.requestAnimationFrame(animate), true)
+}
+
+// start animation
+animate(0)
+
+</script>
+</html>
